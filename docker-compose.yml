@@ -1,0 +1,23 @@
+services:
+  streamlit-host:
+    build: .
+    container_name: streamlit-host
+    ports:
+      - "8080:8080"
+    environment:
+      - STREAMLIT_HOST_DATA=/data
+      - STREAMLIT_HOST_BIND=0.0.0.0
+      - STREAMLIT_HOST_PORT_MIN=8501
+      - STREAMLIT_HOST_PORT_MAX=8999
+      - STREAMLIT_HOST_API_BIND=0.0.0.0
+      - STREAMLIT_HOST_API_PORT=8080
+      - STREAMLIT_HOST_ADMIN_BIND=0.0.0.0
+      - STREAMLIT_HOST_ADMIN_PORT=8500
+      - STREAMLIT_HOST_API_URL=http://localhost:8080/api
+      # 用于 API 返回 access_url（方案A：单端口 + /apps/<id>/）
+      - STREAMLIT_HOST_PUBLIC_BASE=http://localhost:8080
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+
+
