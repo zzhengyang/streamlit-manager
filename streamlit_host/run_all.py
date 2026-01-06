@@ -52,6 +52,10 @@ def main() -> int:
         "console",
         "--server.headless",
         "true",
+        "--server.enableCORS",
+        "false",
+        "--server.enableXsrfProtection",
+        "false",
         "--browser.gatherUsageStats",
         "false",
     ]

@@ -14,7 +14,6 @@ COPY streamlit_host /app/streamlit_host
 
 EXPOSE 8080
 
-EXPOSE 8500
 
 CMD ["python", "-m", "streamlit_host.run_all"]
 

@@ -1,0 +1,12 @@
+{
+  "app_id": "48495fbbd2a34391",
+  "name": "demo",
+  "created_at": "2026-01-06T02:46:54.790058",
+  "updated_at": "2026-01-06T07:51:19.194996",
+  "status": "running",
+  "port": 8501,
+  "pid": 5082,
+  "error": null,
+  "requirements_sha256": "d3c2decc63bb1bae182e706e037a5c2bb89b01560f75a5d4fcf216aa68a999d4",
+  "app_sha256": "2e53be19227c62e5285903d365988fcf1f649e70f15cfb25a50ffcd6700b3fce"
+}

@@ -37,12 +37,12 @@ def health() -> dict:
 def api_health() -> dict:
     return {"ok": True}
 
-@api.get("/apps", response_model=list[AppMeta])
+@api.api_route("/apps", methods=["GET", "HEAD"], response_model=list[AppMeta])
 def list_apps() -> list[AppMeta]:
     return manager.list_apps()
 
 
-@api.get("/apps/{app_id}", response_model=AppMeta)
+@api.api_route("/apps/{app_id}", methods=["GET", "HEAD"], response_model=AppMeta)
 def get_app(app_id: str) -> AppMeta:
     try:
         return manager.get_app(app_id)
@@ -161,10 +161,9 @@ def delete_app(app_id: str) -> dict:
 app.include_router(api)
 
 
-@app.get("/console")
-def console_root() -> dict:
-    # 便于用户发现入口；真实 UI 走 /console/
-    return {"redirect": "/console/"}
+@app.api_route("/console", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+async def console_http_root(request: Request):
+    return await proxy_http(request, upstream=f"http://127.0.0.1:{int(os.getenv('STREAMLIT_HOST_ADMIN_PORT', '8500'))}")
 
 
 @app.api_route("/console/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
@@ -180,9 +179,10 @@ async def console_ws(path: str, websocket: WebSocket):
     await proxy_ws(websocket, upstream)
 
 
-@app.get("/apps/{app_id}")
-def app_root(app_id: str) -> dict:
-    return {"redirect": f"/apps/{app_id}/"}
+@app.api_route("/apps/{app_id}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+async def app_http_root(app_id: str, request: Request):
+    port = _app_port(app_id)
+    return await proxy_http(request, upstream=f"http://127.0.0.1:{port}")
 
 
 def _app_port(app_id: str) -> int:

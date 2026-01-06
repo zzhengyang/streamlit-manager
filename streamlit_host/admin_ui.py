@@ -19,6 +19,17 @@ def _default_api_base() -> str:
     return os.getenv("STREAMLIT_HOST_API_URL", "http://localhost:8080/api").rstrip("/")
 
 
+def _default_public_base(api_base: str) -> str:
+    # 单一入口配置：优先使用 STREAMLIT_HOST_PUBLIC_BASE
+    env = os.getenv("STREAMLIT_HOST_PUBLIC_BASE")
+    if env:
+        return env.rstrip("/")
+    # 否则用 api_base 推断（去掉尾部 /api）
+    if api_base.endswith("/api"):
+        return api_base[: -len("/api")].rstrip("/")
+    return api_base.rstrip("/")
+
+
 def _guess_public_host_from_api(api_base: str) -> str:
     """
     用于拼接 http://<host>:<port> 访问链接（尽量友好显示）。
@@ -53,12 +64,11 @@ st.title("Streamlit 托管管理台")
 with st.sidebar:
     st.subheader("连接设置")
     api_base = st.text_input("API Base URL", value=_default_api_base(), help="例如 http://127.0.0.1:8080")
-    public_host = st.text_input(
-        "对外访问 Host（用于生成应用访问链接）",
-        value=_guess_public_host_from_api(api_base),
-        help="如在容器/内网环境建议显式填域名或 IP",
-    )
-    public_port = st.number_input("对外访问端口", min_value=1, max_value=65535, value=8080, step=1)
+    public_base = st.text_input(
+        "对外访问 Base（统一配置）",
+        value=_default_public_base(api_base),
+        help="例如 http://127.0.0.1:8080 （单端口方案将自动生成 /apps/<id>/ 链接）",
+    ).rstrip("/")
     st.divider()
     if st.button("刷新列表", use_container_width=True):
         st.session_state.pop("apps_cache", None)
@@ -106,7 +116,7 @@ if submitted:
         resp = r.json()
         st.success(f"已创建：{resp.get('name') or ''} ({resp.get('app_id')})")
         app_id = resp.get("app_id")
-        url = f"http://{public_host}:{int(public_port)}/apps/{app_id}/" if app_id else None
+        url = f"{public_base}/apps/{app_id}/" if app_id else None
         st.markdown(f"**访问地址**：`{url}`" if url else "**访问地址**：创建成功但 app_id 缺失")
         st.session_state["last_created_app_id"] = resp.get("app_id")
         st.session_state.pop("apps_cache", None)
@@ -120,20 +130,6 @@ try:
 except Exception as e:
     st.error(f"无法获取应用列表：{e}")
     st.stop()
-
-rows: list[dict[str, Any]] = []
-for a in apps:
-    rows.append(
-        {
-            "app_id": a.get("app_id"),
-            "name": a.get("name") or "",
-            "status": a.get("status"),
-            "port": a.get("port"),
-            "pid": a.get("pid"),
-            "created_at": _fmt_ts(a.get("created_at")),
-            "updated_at": _fmt_ts(a.get("updated_at")),
-        }
-    )
 
 def _status_badge(status: str | None) -> str:
     s = (status or "").lower()
@@ -149,54 +145,60 @@ def _status_badge(status: str | None) -> str:
         return "⚫ created"
     return status or ""
 
-rows_badged: list[dict[str, Any]] = []
-for r in rows:
-    rr = dict(r)
-    rr["status"] = _status_badge(str(r.get("status")) if r.get("status") is not None else None)
-    rows_badged.append(rr)
-
-st.dataframe(rows_badged, use_container_width=True, hide_index=True)
-
 if not apps:
     st.info("暂无应用。")
     st.stop()
 
-# 选择应用（默认优先选择刚创建的）
-options = {a["app_id"]: a for a in apps}
-default_id: str = (
-    st.session_state.get("last_created_app_id")
-    or st.session_state.get("selected_app_id")
-    or apps[0]["app_id"]
-)
-if default_id not in options:
-    default_id = apps[0]["app_id"]
+options = {a["app_id"]: a for a in apps if a.get("app_id")}
 
-label_map: dict[str, str] = {}
+# 列表：点击“查看”后才展示详情/日志
+st.caption("提示：点击某个应用的【查看】后，下方才会出现详情与日志。")
+header = st.columns([2, 2, 2, 3, 1, 1])
+header[0].markdown("**应用名**")
+header[1].markdown("**状态**")
+header[2].markdown("**更新时间**")
+header[3].markdown("**app_id**")
+header[4].markdown("**查看**")
+header[5].markdown("**打开**")
+
 for a in apps:
-    aid = a["app_id"]
-    nm = a.get("name") or aid
-    stt = a.get("status") or ""
-    label_map[aid] = f"{nm}  [{stt}]  ({aid})"
+    app_id = a.get("app_id")
+    if not app_id:
+        continue
+    name = a.get("name") or app_id
+    status = a.get("status")
+    url = f"{public_base}/apps/{app_id}/"
 
-selected_app_id = st.selectbox(
-    "选择要管理的应用",
-    options=list(label_map.keys()),
-    index=list(label_map.keys()).index(default_id),
-    format_func=lambda x: label_map.get(x, x),
-)
-st.session_state["selected_app_id"] = selected_app_id
+    cols = st.columns([2, 2, 2, 3, 1, 1])
+    cols[0].write(name)
+    cols[1].write(_status_badge(status))
+    cols[2].write(_fmt_ts(a.get("updated_at")))
+    cols[3].code(app_id)
+
+    if cols[4].button("查看", key=f"view_{app_id}", use_container_width=True):
+        st.session_state["selected_app_id"] = app_id
+        st.session_state["show_details"] = True
+        st.rerun()
+
+    if str(status).lower() in ("running", "starting"):
+        cols[5].link_button("打开", url, use_container_width=True)
+    else:
+        cols[5].button("打开", disabled=True, key=f"open_disabled_{app_id}", use_container_width=True)
+
+selected_app_id = st.session_state.get("selected_app_id")
+
+if not selected_app_id or not st.session_state.get("show_details"):
+    st.stop()
 
 left, right = st.columns([1, 2], gap="large")
 
 with left:
-    a = options[selected_app_id]
+    a = options.get(selected_app_id) or {}
     st.caption("概要")
     st.write(
         {
             "name": a.get("name"),
             "status": a.get("status"),
-            "port": a.get("port"),
-            "pid": a.get("pid"),
             "created_at": _fmt_ts(a.get("created_at")),
             "updated_at": _fmt_ts(a.get("updated_at")),
         }
@@ -235,7 +237,6 @@ with left:
             st.error(f"启动失败：{e}")
 
     with st.expander("修改应用（保存后自动重启）", expanded=False):
-        st.session_state["show_details"] = True
         new_name = st.text_input("应用名", value=a.get("name") or "", key=f"edit_name_{selected_app_id}")
         c1, c2 = st.columns(2)
         with c1:
@@ -265,18 +266,13 @@ with left:
                 st.success("已提交修改并重启（后台安装依赖中）")
                 app_id = meta.get("app_id")
                 if app_id:
-                    url = f"http://{public_host}:{int(public_port)}/apps/{app_id}/"
+                    url = f"{public_base}/apps/{app_id}/"
                     st.markdown(f"**新访问地址**：`{url}`")
                 st.session_state.pop("apps_cache", None)
             except Exception as e:
                 st.error(f"修改失败：{e}")
 
 with right:
-    # 只有“编辑”场景才展示详情
-    if not st.session_state.get("show_details"):
-        st.info("点击左侧“修改应用（保存后自动重启）”后，这里才会展示应用详情与日志。")
-        st.stop()
-
     st.subheader("详情 / 日志")
     try:
         r = _http("GET", f"{api_base}/apps/{selected_app_id}")
@@ -288,7 +284,7 @@ with right:
 
     status = meta.get("status")
     if meta.get("app_id") and status in ("running", "starting", "stopped", "failed", "created"):
-        url = f"http://{public_host}:{int(public_port)}/apps/{meta.get('app_id')}/"
+        url = f"{public_base}/apps/{meta.get('app_id')}/"
         st.markdown(f"**访问地址**：`{url}`")
 
     if meta.get("error"):

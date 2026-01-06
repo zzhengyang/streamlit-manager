@@ -29,6 +29,19 @@ python -m streamlit_host.run_all
 - API（FastAPI）：`http://localhost:8080/api`
 - 应用访问：`http://localhost:8080/apps/<app_id>/`
 
+## 对外端口/域名如何配置（单一入口）
+
+单端口方案下，所有“打开链接 / 启动日志 url=... / API 返回 access_url”都以 **`STREAMLIT_HOST_PUBLIC_BASE`** 为准。
+
+- 例如你想对外用 `18080`：把 `STREAMLIT_HOST_PUBLIC_BASE` 设为 `http://<host>:18080`
+- `docker-compose.yml` 已支持用 `HOST_PORT` 改对外端口（宿主机端口映射到容器内 8080）
+
+建议做法：
+
+- 复制 `env.example` 为 `.env`，然后修改：
+  - `HOST_PORT=18080`
+  - `STREAMLIT_HOST_PUBLIC_BASE=http://127.0.0.1:18080`
+
 ### 2) Docker 方式运行（推荐私有部署）
 
 ```bash

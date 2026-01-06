@@ -201,7 +201,11 @@ class AppManager:
         meta.port = int(port)
         meta.status = AppStatus.starting
         self._save_meta(meta)
-        self._append_log(app_id, f"starting (manual) port={meta.port}")
+        pub = self._public_app_url(app_id)
+        if pub:
+            self._append_log(app_id, f"starting (manual) url={pub}")
+        else:
+            self._append_log(app_id, f"starting (manual) port={meta.port}")
 
         t = threading.Thread(target=self._provision_and_start, args=(app_id,), daemon=True)
         t.start()
@@ -245,6 +249,16 @@ class AppManager:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         with log_path.open("a", encoding="utf-8") as f:
             f.write(f"[{ts}] {msg}\n")
+
+    def _public_app_url(self, app_id: str) -> str | None:
+        """
+        单端口方案：对外 URL 为 {STREAMLIT_HOST_PUBLIC_BASE}/apps/<app_id>/
+        例如：http://0.0.0.0:8080/apps/xxxx/
+        """
+        base = os.getenv("STREAMLIT_HOST_PUBLIC_BASE")
+        if not base:
+            return None
+        return base.rstrip("/") + f"/apps/{app_id}/"
 
     def _run_cmd(
         self,
@@ -370,7 +384,11 @@ class AppManager:
             meta.pid = proc.pid
             meta.status = AppStatus.running
             self._save_meta(meta)
-            self._append_log(app_id, f"streamlit started pid={proc.pid} port={port}")
+            pub = self._public_app_url(app_id)
+            if pub:
+                self._append_log(app_id, f"streamlit started pid={proc.pid} url={pub}")
+            else:
+                self._append_log(app_id, f"streamlit started pid={proc.pid} port={port}")
         except Exception as e:
             meta.status = AppStatus.failed
             meta.error = str(e)
