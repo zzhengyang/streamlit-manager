@@ -69,6 +69,8 @@ python -m streamlit_host.run_all
 
 ## 使用流程（推荐）
 
+![操作流程](assets/image1.png)
+
 1) **打开控制台**
 
 - `PUBLIC_BASE/console/`
@@ -87,6 +89,8 @@ python -m streamlit_host.run_all
 4) **查看日志**
 
 - 进入应用详情后，可查看 `run.log`（支持自动刷新与自动滚动到底部）
+
+![日志展示](assets/image.png)
 
 5) **编辑并重启**
 
