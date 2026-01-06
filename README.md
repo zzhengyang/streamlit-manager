@@ -1,113 +1,128 @@
-# Streamlit 私有托管服务（上传 requirements.txt + app.py 自动部署）
+## Streamlit 私有托管服务（单端口 8080/自定义端口）
 
-这是一个可在**私有环境**部署的 Streamlit 托管服务：
+在私有环境部署一个“Streamlit 托管平台”：
 
-- 用户上传 `requirements.txt` 与 `app.py`
-- 服务端为每个应用创建独立目录与虚拟环境（venv）
-- 自动安装依赖、分配空闲端口并启动 Streamlit
-- 提供查询状态、查看日志、停止/删除应用的 API
+- **控制台（Streamlit）**：创建/启动/停止/编辑应用、查看日志
+- **托管应用（Streamlit）**：每个应用独立目录与 venv，自动安装依赖并运行
+- **单端口暴露**：对外只暴露一个端口（默认 `8080`），通过路径区分控制台/API/应用
 
-> 注意：该系统会执行用户上传的 Python 代码。请仅在**受信任的私有环境**使用，并结合容器隔离、网络策略与资源限制（cgroup/ulimit）进一步加固。
+> 安全提醒：该系统会执行用户上传的 Python 代码。请仅在受信任的私有环境使用，并结合容器隔离、网络策略、资源限制进一步加固。
 
-## 运行方式（本机 / 服务器）
+## 访问入口（单端口）
 
-### 1) Python 方式运行控制面
+假设对外入口为 `PUBLIC_BASE=http://<host>:<port>`：
+
+- **控制台**：`PUBLIC_BASE/console/`
+- **API**：`PUBLIC_BASE/api`
+- **应用**：`PUBLIC_BASE/apps/<app_id>/`
+
+## 快速开始（Docker，推荐）
+
+在项目根目录执行：
 
 ```bash
-cd /Users/zhengyang/Documents/zy/streamlit-app
+docker compose up -d --build
+```
+
+打开控制台：
+
+- `http://127.0.0.1:8080/console/`
+
+## 对外端口/域名如何配置（只改一个地方）
+
+所有“打开链接 / 启动日志 url=... / API 返回 access_url”都以 **`STREAMLIT_HOST_PUBLIC_BASE`** 为准。
+
+### 推荐做法：使用 `.env`
+
+项目提供 `env.example`，你可以复制为 `.env`：
+
+```bash
+cp env.example .env
+```
+
+然后只需要改两项：
+
+- `HOST_PORT`: 对外暴露端口（宿主机端口 → 容器内 8080）
+- `STREAMLIT_HOST_PUBLIC_BASE`: 对外基地址（包含端口）
+
+例如你希望对外用 `18080`：
+
+- `HOST_PORT=18080`
+- `STREAMLIT_HOST_PUBLIC_BASE=http://127.0.0.1:18080`
+
+然后重启：
+
+```bash
+docker compose up -d --build
+```
+
+## 本机运行（不使用 Docker）
+
+```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python -m streamlit_host.run_all
 ```
 
-默认数据目录：`./data`（可通过环境变量 `STREAMLIT_HOST_DATA` 修改）。
+默认数据目录：`./data`（可通过 `STREAMLIT_HOST_DATA` 修改）。
 
-启动后：
+## 使用流程（推荐）
 
-- 管理台（Streamlit）：`http://localhost:8080/console/`
-- API（FastAPI）：`http://localhost:8080/api`
-- 应用访问：`http://localhost:8080/apps/<app_id>/`
+1) **打开控制台**
 
-## 对外端口/域名如何配置（单一入口）
+- `PUBLIC_BASE/console/`
 
-单端口方案下，所有“打开链接 / 启动日志 url=... / API 返回 access_url”都以 **`STREAMLIT_HOST_PUBLIC_BASE`** 为准。
+2) **创建应用**
 
-- 例如你想对外用 `18080`：把 `STREAMLIT_HOST_PUBLIC_BASE` 设为 `http://<host>:18080`
-- `docker-compose.yml` 已支持用 `HOST_PORT` 改对外端口（宿主机端口映射到容器内 8080）
+- 填写应用名
+- 上传 `requirements.txt` 与 `app.py`
+- 创建成功后控制台会给出访问地址：`PUBLIC_BASE/apps/<app_id>/`
 
-建议做法：
+3) **启动/停止**
 
-- 复制 `env.example` 为 `.env`，然后修改：
-  - `HOST_PORT=18080`
-  - `STREAMLIT_HOST_PUBLIC_BASE=http://127.0.0.1:18080`
+- 在应用列表点击【查看】进入详情
+- 使用【启动】/【停止】控制进程
 
-### 2) Docker 方式运行（推荐私有部署）
+4) **查看日志**
 
-```bash
-cd /Users/zhengyang/Documents/zy/streamlit-app
-docker compose up -d --build
-```
+- 进入应用详情后，可查看 `run.log`（支持自动刷新与自动滚动到底部）
 
-控制面默认监听 `8080`，应用会占用动态端口（默认在 `8501-8999` 范围内分配）。
-但在“单端口方案A”下，这些内部端口不会对外暴露，对外统一走 `8080` 反代。
+5) **编辑并重启**
 
-## API 使用示例
+- 在详情页上传新的 `app.py`/`requirements.txt` 或修改应用名
+- 保存后会自动重启
 
-### 创建应用（上传 requirements.txt + app.py）
+## API（简要）
 
-```bash
-curl -sS -X POST "http://localhost:8080/apps" \
-  -F "requirements=@requirements.txt" \
-  -F "app=@app.py"
-```
+所有 API 都在 `/api` 前缀下：
 
-> 注意：单端口方案下 API 路径是 `/api`，所以上面命令需要改成：
->
-> `POST http://localhost:8080/api/apps`
+- `GET /api/apps`：列出应用
+- `POST /api/apps`：创建应用（`multipart/form-data`，字段：`name`、`requirements`、`app`）
+- `GET /api/apps/{app_id}`：查询应用状态
+- `PATCH /api/apps/{app_id}`：修改应用（可选字段：`name`/`requirements`/`app`，自动重启）
+- `POST /api/apps/{app_id}/start`：启动
+- `POST /api/apps/{app_id}/stop`：停止
+- `GET /api/apps/{app_id}/logs?tail=200`：查看日志尾部
+- `DELETE /api/apps/{app_id}`：删除
 
-返回示例（简化）：
-
-```json
-{
-  "app_id": "a7c1e0f2b9f84a62",
-  "port": 8501,
-  "status": "starting"
-}
-```
-
-### 查询状态
+创建应用示例：
 
 ```bash
-curl -sS "http://localhost:8080/apps/a7c1e0f2b9f84a62"
+curl -sS -X POST "http://localhost:8080/api/apps" \
+  -F "name=demo" \
+  -F "requirements=@demo_app/requirements.txt" \
+  -F "app=@demo_app/app.py"
 ```
 
-### 查看日志（默认返回尾部）
+## 存储位置
 
-```bash
-curl -sS "http://localhost:8080/apps/a7c1e0f2b9f84a62/logs?tail=200"
-```
+默认在 `./data/apps/<app_id>/`：
 
-### 停止应用
-
-```bash
-curl -sS -X POST "http://localhost:8080/apps/a7c1e0f2b9f84a62/stop"
-```
-
-### 删除应用（停止并删除目录）
-
-```bash
-curl -sS -X DELETE "http://localhost:8080/apps/a7c1e0f2b9f84a62"
-```
-
-## 目录结构
-
-- `streamlit_host/`：控制面服务代码（FastAPI + 进程管理）
-- `data/apps/<app_id>/`：每个应用的隔离目录
-  - `app.py`
-  - `requirements.txt`
-  - `venv/`
-  - `run.log`
-  - `meta.json`
+- `app.py`
+- `requirements.txt`
+- `venv/`（每个应用独立虚拟环境）
+- `run.log`（安装/启动/停止日志）
+- `meta.json`（状态、端口、pid、name 等）
 
 
