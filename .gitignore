@@ -1,3 +1,4 @@
+data/apps/
 __pycache__/
 *.pyc
 .venv/

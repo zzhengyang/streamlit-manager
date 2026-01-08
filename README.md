@@ -1,62 +1,38 @@
-## Streamlit 私有托管服务（单端口 8080/自定义端口）
+## corpApps
 
-在私有环境部署一个“Streamlit 托管平台”：
+`corpApps` is a Streamlit app hosting platform for **private/internal deployments**. It consolidates the **Admin Console / API / hosted apps** behind a **single public port** (default: `8080`). You can upload `app.py` + `requirements.txt` in the console to create/start/update Streamlit apps, with status tracking and logs.
 
-- **控制台（Streamlit）**：创建/启动/停止/编辑应用、查看日志
-- **托管应用（Streamlit）**：每个应用独立目录与 venv，自动安装依赖并运行
-- **单端口暴露**：对外只暴露一个端口（默认 `8080`），通过路径区分控制台/API/应用
+- Chinese README: `README.zh-CN.md`
+- Feishu manual (ZH): `docs/feishu_manual_zh.md`
 
-> 安全提醒：该系统会执行用户上传的 Python 代码。请仅在受信任的私有环境使用，并结合容器隔离、网络策略、资源限制进一步加固。
+- **Admin console (Streamlit)**: create/start/stop/edit apps, view logs (via `/console/`)
+- **Hosted apps (Streamlit)**: one directory + one venv per app, auto-install dependencies and run (via `/apps/<app_id>/`)
+- **API (FastAPI)**: app lifecycle management + reverse proxy (via `/api/*`)
+- **Single public port**: only one external entrypoint; internal ports (console `8500`, apps `85xx`) are not exposed
 
-## 访问入口（单端口）
+> **Security note**: this system executes user-uploaded Python code. Use it only in trusted private environments, and harden it with container isolation, network policies, and resource limits.
 
-假设对外入口为 `PUBLIC_BASE=http://<host>:<port>`：
+### Endpoints (single public port)
 
-- **控制台**：`PUBLIC_BASE/console/`
-- **API**：`PUBLIC_BASE/api`
-- **应用**：`PUBLIC_BASE/apps/<app_id>/`
+Assume the public entry is `PUBLIC_BASE=http://<host>:<port>`:
 
-## 快速开始（Docker，推荐）
+- **Console**: `PUBLIC_BASE/console/`
+- **API**: `PUBLIC_BASE/api`
+- **Apps**: `PUBLIC_BASE/apps/<app_id>/`
 
-在项目根目录执行：
+### Quick start (Docker, recommended)
+
+Run in the project root:
 
 ```bash
 docker compose up -d --build
 ```
 
-打开控制台：
+Open the console:
 
 - `http://127.0.0.1:8080/console/`
 
-## 对外端口/域名如何配置（只改一个地方）
-
-所有“打开链接 / 启动日志 url=... / API 返回 access_url”都以 **`STREAMLIT_HOST_PUBLIC_BASE`** 为准。
-
-### 推荐做法：使用 `.env`
-
-项目提供 `env.example`，你可以复制为 `.env`：
-
-```bash
-cp env.example .env
-```
-
-然后只需要改两项：
-
-- `HOST_PORT`: 对外暴露端口（宿主机端口 → 容器内 8080）
-- `STREAMLIT_HOST_PUBLIC_BASE`: 对外基地址（包含端口）
-
-例如你希望对外用 `18080`：
-
-- `HOST_PORT=18080`
-- `STREAMLIT_HOST_PUBLIC_BASE=http://127.0.0.1:18080`
-
-然后重启：
-
-```bash
-docker compose up -d --build
-```
-
-## 本机运行（不使用 Docker）
+### Quick start (local run, no Docker)
 
 ```bash
 python -m venv .venv
@@ -65,52 +41,78 @@ pip install -r requirements.txt
 python -m streamlit_host.run_all
 ```
 
-默认数据目录：`./data`（可通过 `STREAMLIT_HOST_DATA` 修改）。
+Default data directory is `./data` (override via `STREAMLIT_HOST_DATA`).
 
-## 使用流程（推荐）
+### Configure public port / domain (change one thing)
 
-![操作流程](assets/image1.png)
+All generated links (console “Open” button, logs `url=...`, API `access_url`) are based on **`STREAMLIT_HOST_PUBLIC_BASE`**.
 
-1) **打开控制台**
+This repo provides `env.example`. Recommended: copy it to `.env`:
+
+```bash
+cp env.example .env
+```
+
+Typically you only need to change:
+
+- **`HOST_PORT`**: public port on the host (host port → container `8080`)
+- **`STREAMLIT_HOST_PUBLIC_BASE`**: external base URL (domain + optional port)
+
+Example: expose `18080`:
+
+- `HOST_PORT=18080`
+- `STREAMLIT_HOST_PUBLIC_BASE=http://127.0.0.1:18080`
+
+Then restart:
+
+```bash
+docker compose up -d --build
+```
+
+### Usage (via the console)
+
+![Workflow](assets/image1.png)
+
+1) **Open the console**
 
 - `PUBLIC_BASE/console/`
 
-2) **创建应用**
+2) **Create an app**
 
-- 填写应用名
-- 上传 `requirements.txt` 与 `app.py`
-- 创建成功后控制台会给出访问地址：`PUBLIC_BASE/apps/<app_id>/`
+- Enter an app name
+- Upload `requirements.txt` and `app.py`
+- After creation, the console shows: `PUBLIC_BASE/apps/<app_id>/`
 
-3) **启动/停止**
+3) **Start / stop**
 
-- 在应用列表点击【查看】进入详情
-- 使用【启动】/【停止】控制进程
+- Click **View** in the app list to open details
+- Use **Start** / **Stop** to control the process
 
-4) **查看日志**
+4) **View logs**
 
-- 进入应用详情后，可查看 `run.log`（支持自动刷新与自动滚动到底部）
+- In the app details page, view `run.log` (supports auto-refresh and auto-scroll)
 
-![日志展示](assets/image.png)
+![Logs](assets/image.png)
 
-5) **编辑并重启**
+5) **Edit and restart**
 
-- 在详情页上传新的 `app.py`/`requirements.txt` 或修改应用名
-- 保存后会自动重启
+- Upload a new `app.py` / `requirements.txt` or update the app name
+- Saving triggers an automatic restart (dependencies re-installed in background)
 
-## API（简要）
+### API (brief)
 
-所有 API 都在 `/api` 前缀下：
+All endpoints are under `/api`:
 
-- `GET /api/apps`：列出应用
-- `POST /api/apps`：创建应用（`multipart/form-data`，字段：`name`、`requirements`、`app`）
-- `GET /api/apps/{app_id}`：查询应用状态
-- `PATCH /api/apps/{app_id}`：修改应用（可选字段：`name`/`requirements`/`app`，自动重启）
-- `POST /api/apps/{app_id}/start`：启动
-- `POST /api/apps/{app_id}/stop`：停止
-- `GET /api/apps/{app_id}/logs?tail=200`：查看日志尾部
-- `DELETE /api/apps/{app_id}`：删除
+- **`GET /api/apps`**: list apps
+- **`POST /api/apps`**: create app (`multipart/form-data`: `name`, `requirements`, `app`)
+- **`GET /api/apps/{app_id}`**: get app status
+- **`PATCH /api/apps/{app_id}`**: update app (`name`/`requirements`/`app`), auto-restart
+- **`POST /api/apps/{app_id}/start`**: start
+- **`POST /api/apps/{app_id}/stop`**: stop
+- **`GET /api/apps/{app_id}/logs?tail=200`**: tail logs
+- **`DELETE /api/apps/{app_id}`**: delete
 
-创建应用示例：
+Create an app example (using the built-in `demo_app`):
 
 ```bash
 curl -sS -X POST "http://localhost:8080/api/apps" \
@@ -119,14 +121,38 @@ curl -sS -X POST "http://localhost:8080/api/apps" \
   -F "app=@demo_app/app.py"
 ```
 
-## 存储位置
+### Project layout (core)
 
-默认在 `./data/apps/<app_id>/`：
+- **`streamlit_host/`**: platform service (FastAPI entry, admin console, reverse proxy, app manager)
+- **`demo_app/`**: a sample Streamlit app to validate the hosting flow
+- **`data/`**: runtime data (app files, venv, logs, metadata; mounted to `/data` in Docker)
+- **`assets/`**: README screenshots
+
+### On-disk storage format
+
+By default: `./data/apps/<app_id>/`:
 
 - `app.py`
 - `requirements.txt`
-- `venv/`（每个应用独立虚拟环境）
-- `run.log`（安装/启动/停止日志）
-- `meta.json`（状态、端口、pid、name 等）
+- `venv/`: per-app virtual environment
+- `run.log`: install/start/stop logs
+- `meta.json`: status, port, pid, name, error, etc.
+
+### FAQ / Troubleshooting
+
+- **Console shows blank page or assets fail to load**
+  - Ensure you are using `PUBLIC_BASE/console/` (the trailing `/` is more reliable)
+  - If deployed behind a reverse proxy / domain, set `STREAMLIT_HOST_PUBLIC_BASE` to the final external URL (including `https`, domain, and port if any)
+
+- **App stuck in `starting` or becomes `failed`**
+  - Check `run.log` in the app details page; the most common cause is dependency installation failure or port issues
+  - Ensure the host/container can create venv under `data/apps/<id>/venv`, and there is enough disk space
+
+- **Port range conflicts**
+  - Adjust the app port pool via `STREAMLIT_HOST_PORT_MIN` / `STREAMLIT_HOST_PORT_MAX` (default: `8501-8999`)
+
+### License
+
+If you plan to publish externally, add a license here (e.g., MIT/Apache-2.0) and any internal usage constraints.
 
 
